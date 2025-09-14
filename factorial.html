@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Factorial Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.11.1/core.css" />
+    <script type="module" src="https://pyscript.net/releases/2024.11.1/core.js"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom right, #ecfdf5, #e0f2fe);
+            font-family: 'Inter', sans-serif;
+        }
+
+        .step-box {
+            transition: transform 0.4s ease, box-shadow 0.4s ease, background-color 0.4s ease;
+            border-radius: 14px;
+            background: white;
+            position: relative;
+        }
+
+        .step-box:hover {
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.25);
+        }
+
+        .highlight {
+            animation: glow 0.8s ease forwards;
+        }
+
+        @keyframes glow {
+            0%   { background-color: #bbf7d0; box-shadow: 0 0 0px rgba(34,197,94,0.4); }
+            50%  { background-color: #99f6e4; box-shadow: 0 0 12px rgba(45,212,191,0.6); }
+            100% { background-color: #f0fdf4; box-shadow: 0 0 0px rgba(34,197,94,0.3); }
+        }
+
+        table {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        thead {
+            background: linear-gradient(to right, #10b981, #14b8a6);
+            color: white;
+        }
+
+        th, td {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e5e7eb;
+            text-align: center;
+        }
+
+        td {
+            background-color: #f9fafb;
+        }
+
+        tr:nth-child(even) td {
+            background-color: #f1f5f9;
+        }
+
+        .arrow {
+            font-size: 2rem;
+            color: #6b7280;
+            transition: transform 0.3s ease, color 0.3s ease;
+        }
+        .arrow.animate {
+            animation: pulseArrow 0.6s infinite alternate;
+        }
+
+        @keyframes pulseArrow {
+            0% { color: #6b7280; transform: scale(1); }
+            100% { color: #10b981; transform: scale(1.3); }
+        }
+
+        .floating {
+            position: absolute;
+            font-weight: bold;
+            color: #059669;
+            animation: floatUp 0.7s ease forwards;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-24px); }
+        }
+    </style>
+</head>
+<body class="p-6">
+
+<div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-lg border border-gray-200">
+    <h2 class="text-3xl font-extrabold mb-4 text-center text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-600">
+        Factorial Calculator 🧮 (Recursion Visualization)
+    </h2>
+
+    <div class="mb-4">
+        <label class="block text-gray-700 font-medium mb-2">Enter a number (0 to 20):</label>
+        <input id="num" type="number" value="5" min="0" max="20"
+               class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"/>
+    </div>
+
+    <button id="calcBtn" class="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white font-semibold py-2 rounded-md shadow-md hover:opacity-90 transition">
+        ▶️ Calculate
+    </button>
+
+    <h3 class="text-xl font-semibold mt-6 text-gray-800">Recursive Steps:</h3>
+    <div id="steps" class="bg-gray-50 p-4 rounded-md max-w-full overflow-x-auto border flex items-center space-x-6"></div>
+
+    <h3 class="text-xl font-semibold mt-6 text-gray-800">Final Result:</h3>
+    <div id="output" class="text-2xl font-extrabold text-emerald-700 mt-2"></div>
+</div>
+
+<script type="py">
+from js import document
+from pyodide.ffi import create_proxy
+import asyncio
+
+factorial_memo = {}
+call_counter = 0
+
+def depth_color(depth):
+    """Generate a pastel teal color based on recursion depth."""
+    base = 200 - depth*12
+    base = max(base, 120)
+    return f"rgb(16,{base},129)"
+
+async def create_call_table(n, depth):
+    global call_counter
+    call_counter += 1
+    uid = f"{depth}-{n}-{call_counter}"
+
+    steps_el = document.getElementById("steps")
+
+    # Arrow
+    if depth > 0:
+        arrow_el = document.createElement("div")
+        arrow_el.className = "arrow animate"
+        arrow_el.innerHTML = "&#8594;"  # →
+        steps_el.appendChild(arrow_el)
+
+    # Box
+    container = document.createElement("div")
+    container.className = "step-box p-4 shadow-md flex-shrink-0 border border-gray-200 animate-bounce"
+    container.style.backgroundColor = depth_color(depth)
+
+    html = f"""
+    <table class="table-auto border-collapse text-center w-56">
+        <thead>
+            <tr>
+                <th>Func</th>
+                <th>n</th>
+                <th>sub</th>
+                <th>ret</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="font-mono">fact</td>
+                <td>{n}</td>
+                <td id="sub-{uid}" class="font-mono text-teal-600">🔄</td>
+                <td id="result-{uid}" class="font-bold text-green-600">...</td>
+            </tr>
+        </tbody>
+    </table>
+    """
+    container.innerHTML = html
+    steps_el.appendChild(container)
+    steps_el.scrollLeft = steps_el.scrollWidth
+
+    await asyncio.sleep(0.6)
+    container.classList.remove("animate-bounce")
+
+    result_cell = document.getElementById(f"result-{uid}")
+    sub_cell = document.getElementById(f"sub-{uid}")
+    return result_cell, sub_cell, container, uid
+
+async def float_animation(container, text):
+    """Show floating multiplication animation."""
+    float_el = document.createElement("div")
+    float_el.className = "floating"
+    float_el.innerText = text
+    container.appendChild(float_el)
+    await asyncio.sleep(0.7)
+    container.removeChild(float_el)
+
+async def factorial(n, depth=0):
+    result_cell, sub_cell, container, uid = await create_call_table(n, depth)
+
+    if n in factorial_memo:
+        result = factorial_memo[n]
+        sub_cell.innerText = f"{result} ✅"
+        result_cell.innerText = f"{result} ✅"
+        result_cell.classList.add("highlight")
+        return result
+
+    if n <= 1:
+        result = 1
+        sub_cell.innerText = "-"
+    else:
+        sub_result = await factorial(n-1, depth+1)
+        sub_cell.innerText = f"{sub_result} 🔄"
+        await float_animation(container, f"{n} × {sub_result}")
+        result = n * sub_result
+
+    result_cell.innerText = f"{result} ✅"
+    result_cell.classList.add("highlight")
+    factorial_memo[n] = result
+    return result
+
+async def calculate_factorial(event=None):
+    global factorial_memo, call_counter
+    document.getElementById("steps").innerHTML = ""
+    document.getElementById("output").innerText = ""
+    factorial_memo = {}
+    call_counter = 0
+
+    try:
+        user_input = int(document.getElementById("num").value)
+        if user_input < 0 or user_input > 20:
+            raise ValueError("Please enter a number between 0 and 20.")
+
+        result = await factorial(user_input)
+        document.getElementById("output").innerHTML = f"<b>Factorial({user_input}) = {result}</b> 🎯"
+
+    except ValueError as e:
+        document.getElementById("output").innerText = f"Error: {str(e)}"
+
+callback_proxy = create_proxy(calculate_factorial)
+document.getElementById("calcBtn").addEventListener("click", callback_proxy)
+</script>
+</body>
+</html>

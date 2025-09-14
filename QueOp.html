@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Queue Operations</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body { background:#F9F6EE; padding:60px 20px; font-family:sans-serif; }
+
+h2 { 
+  color:#6F9F9C; 
+  margin-bottom:60px; 
+  font-size:15rem; /* Enormous header */
+  font-weight:bold; 
+  text-align:center; 
+  text-shadow: 3px 3px 18px rgba(0,0,0,0.2);
+}
+
+.controls { display:flex; gap:30px; justify-content:center; margin-bottom:50px; flex-wrap:wrap; }
+input { border:2px solid #E5D8AF; border-radius:20px; padding:36px 60px; font-size:3rem; outline:none; background:#F9F6EE; color:#3b2f2f; transition:0.3s; width:400px; text-align:center; }
+input:focus { border-color:#DCCF91; }
+button { padding:32px 60px; border-radius:22px; font-weight:bold; font-size:2.5rem; transition:0.3s; cursor:pointer; }
+button:hover { transform:scale(1.1); }
+
+/* Queue remains unchanged */
+#queue { display:flex; align-items:center; justify-content:center; gap:20px; min-height:120px; 
+  padding:40px; background:linear-gradient(135deg,#F9F6EE,#F5F0E6); border-radius:25px; 
+  box-shadow:0 12px 30px rgba(0,0,0,0.15); flex-wrap:wrap; position:relative; transition: transform 0.3s ease-in-out; }
+
+.queue-pop { animation:queuePop 0.35s forwards; }
+
+.queue-item { border-radius:18px; padding:28px 40px; font-weight:bold; font-size:1.8rem; color:#fff; box-shadow:0 8px 18px rgba(0,0,0,0.15); transition: transform 0.5s cubic-bezier(0.68,-0.55,0.27,1.55), background 0.3s, box-shadow 0.3s; flex-shrink:0; }
+.queue-item:hover { transform: scale(1.15); box-shadow:0 12px 30px rgba(0,0,0,0.25); }
+.queue-front { background:linear-gradient(135deg,#E5D8AF,#DCCF91); color:#3b2f2f; animation:frontPulse 0.5s; }
+.queue-rear { background:linear-gradient(135deg,#6F9F9C,#5B8683); color:#fff; animation:rearPulse 0.5s; }
+.queue-default { background:linear-gradient(135deg,#DCCF91,#5B8683); color:#fff; }
+
+.arrow { font-size:2rem; font-weight:bold; color:#6F9F9C; transition: transform 0.5s ease-in-out, opacity 0.3s; opacity:0; animation:arrowFlow 0.5s forwards; }
+
+#message { text-align:center; margin-top:30px; font-size:2rem; color:#6F9F9C; font-weight:bold; }
+
+@keyframes slideIn { from { transform:translateX(50px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+@keyframes popFade { 0% { transform: scale(1); opacity:1; } 50% { transform: scale(1.4); opacity:0.7; } 100% { transform: scale(0); opacity:0; } }
+@keyframes frontPulse { 0% { transform:scale(1); } 50% { transform:scale(1.15); } 100% { transform:scale(1); } }
+@keyframes rearPulse { 0% { transform:scale(1); } 50% { transform:scale(1.15); } 100% { transform:scale(1); } }
+@keyframes arrowFlow { 0% { transform: translateX(-5px); opacity:0; } 50% { transform: translateX(3px); opacity:1; } 100% { transform: translateX(0); opacity:1; } }
+@keyframes queuePop { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+</style>
+</head>
+<body>
+<h2 style="font-size:4rem; font-weight:bold; text-align:center; color:#6F9F9C; text-shadow: 3px 3px 18px rgba(0,0,0,0.2);">
+  ✨ Queue Operations ✨
+</h2>
+<div class="controls">
+<input type="text" id="value" placeholder="Enter value">
+<button onclick="enqueue()" style="background:#E5D8AF;color:#3b2f2f;">Enqueue ➕</button>
+<button onclick="dequeue()" style="background:#6F9F9C;color:#fff;">Dequeue ➖</button>
+</div>
+
+<div id="queue"></div>
+<p id="message"></p>
+
+<script>
+let pyodideReadyPromise = loadPyodide();
+
+async function enqueue(){
+  const val = document.getElementById("value").value.trim();
+  if(!val){ document.getElementById("message").innerText="⚠️ Please enter a value!"; return; }
+  const pyodide = await pyodideReadyPromise;
+  await pyodide.runPythonAsync(`
+from collections import deque
+try: queue
+except NameError: queue = deque()
+queue.append("${val}")
+result = list(queue)
+`);
+  const result = pyodide.globals.get("result").toJs();
+  renderQueue(result,"enqueue");
+  document.getElementById("message").innerText="✅ Enqueued: "+val;
+  document.getElementById("value").value="";
+}
+
+async function dequeue(){
+  const pyodide = await pyodideReadyPromise;
+  await pyodide.runPythonAsync(`
+if len(queue)==0: removed=None
+else: removed=queue.popleft()
+result=(removed,list(queue))
+`);
+  const result = pyodide.globals.get("result").toJs();
+  const removed = result[0];
+  const queueList = result[1];
+  document.getElementById("message").innerText = removed===null?"⚠️ Queue is empty!":"🗑️ Dequeued: "+removed;
+  renderQueue(queueList,"dequeue",removed);
+}
+
+function renderQueue(queueList,action,removed=null){
+  const container = document.getElementById("queue");
+  container.classList.remove("queue-pop"); 
+  void container.offsetWidth; 
+  container.classList.add("queue-pop"); 
+
+  container.innerHTML="";
+  queueList.forEach((item,idx)=>{
+    const box=document.createElement("div");
+    box.innerText=item; box.className="queue-item";
+    if(idx===0) box.classList.add("queue-front");
+    else if(idx===queueList.length-1) box.classList.add("queue-rear");
+    else box.classList.add("queue-default");
+    if(action==="enqueue" && idx===queueList.length-1) box.style.animation="slideIn 0.5s";
+    container.appendChild(box);
+    if(idx<queueList.length-1){
+      const arrow=document.createElement("span");
+      arrow.innerText="→"; arrow.className="arrow";
+      arrow.style.animation="arrowFlow 0.5s forwards";
+      container.appendChild(arrow);
+    }
+  });
+
+  if(action==="dequeue" && removed!==null){
+    const removedBox=document.createElement("div");
+    removedBox.innerText=removed; removedBox.className="queue-item queue-front";
+    removedBox.style.position="absolute"; removedBox.style.left="50%"; removedBox.style.top="50%";
+    removedBox.style.transform="translate(-50%, -50%)";
+    removedBox.style.animation="popFade 0.6s forwards";
+    document.body.appendChild(removedBox);
+    setTimeout(()=>removedBox.remove(),600);
+  }
+}
+</script>
+
+</body>
+</html>
